@@ -77,6 +77,11 @@ func (s servers) Less(i, j int) bool {
 	return s[i].MainIP < s[j].MainIP
 }
 
+// AppInfo represents the application information of a Vultr server
+type AppInfo struct {
+	Info string `json:"app_info"`
+}
+
 // V6Network represents a IPv6 network of a Vultr server
 type V6Network struct {
 	Network     string `json:"v6_network"`
@@ -593,6 +598,14 @@ func (c *Client) ListApplicationsforServer(id string) (apps []Application, err e
 	return apps, nil
 }
 
+// GetApplicationInfo retrieves the application information for the existing virtual machine
+func (c *Client) GetApplicationInfo(id string) (appInfo AppInfo, err error) {
+	if err := c.get(`server/get_app_info?SUBID=`+id, &appInfo); err != nil {
+		return AppInfo{}, err
+	}
+	return appInfo, nil
+}
+
 // PrivateNetwork on Vultr
 type PrivateNetwork struct {
 	ID         string `json:"NETWORKID"`
@@ -644,4 +657,66 @@ func (c *Client) EnablePrivateNetworkForServer(id, networkID string) error {
 	}
 
 	return c.post(`server/private_network_enable`, values, nil)
+}
+
+// BackupSchedule represents a scheduled backup on a server
+// see: server/backup_set_schedule, server/backup_get_schedule
+type BackupSchedule struct {
+	CronType             string `json:"cron_type"`
+	NextScheduledTimeUtc string `json:"next_scheduled_time_utc"`
+	Hour                 int    `json:"hour"`
+	Dow                  int    `json:"dow"`
+	Dom                  int    `json:"dom"`
+}
+
+// BackupScheduleResponse details about a virtual machines backup schedule
+type BackupScheduleResponse struct {
+	Enabled bool `json:"enabled"`
+	BackupSchedule
+}
+
+// BackupGetSchedule returns a virtual machines backup schedule
+func (c *Client) BackupGetSchedule(id string) (*BackupScheduleResponse, error) {
+	var bsr = &BackupScheduleResponse{}
+	values := url.Values{
+		"SUBID": {id},
+	}
+	if err := c.post(`server/backup_get_schedule`, values, &bsr); err != nil {
+		return nil, err
+	}
+	return bsr, nil
+}
+
+// BackupSetSchedule sets the backup schedule given a BackupSchedule struct
+func (c *Client) BackupSetSchedule(id string, bs BackupSchedule) error {
+	values := url.Values{
+		"SUBID":     {id},
+		"cron_type": {bs.CronType},
+		"hour":      {string(bs.Hour)},
+		"dow":       {string(bs.Dow)},
+		"dom":       {string(bs.Dom)},
+	}
+	return c.post(`server/backup_set_schedule`, values, nil)
+}
+
+// ChangePlanOfServer changes the virtual machine to a different plan
+func (c *Client) ChangePlanOfServer(id string, planID int) error {
+	values := url.Values{
+		"SUBID":     {id},
+		"VPSPLANID": {fmt.Sprintf("%v", planID)},
+	}
+
+	if err := c.post(`server/upgrade_plan`, values, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ListUpgradePlansForServer retrieves a list of the VPSPLANIDs for which a virtual machine can be upgraded.
+// An empty response means that there are currently no upgrades available
+func (c *Client) ListUpgradePlansForServer(id string) (planIDs []int, err error) {
+	if err := c.get(`server/upgrade_plan_list?SUBID=`+id, &planIDs); err != nil {
+		return nil, err
+	}
+	return
 }

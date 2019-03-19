@@ -5,11 +5,16 @@ import (
 	"runtime"
 
 	vultr "github.com/JamesClonk/vultr/lib"
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 )
 
 // RegisterCommands registers all CLI commands
 func (c *CLI) RegisterCommands() {
+	// backup
+	c.Command("backup", "see most recent backups", func(cmd *cli.Cmd) {
+		cmd.Command("list", "lists backups", backupsList)
+	})
+
 	// dns
 	c.Command("dns", "modify DNS", func(cmd *cli.Cmd) {
 		cmd.Command("domain", "show and change DNS domains", func(cmd *cli.Cmd) {
@@ -72,6 +77,10 @@ func (c *CLI) RegisterCommands() {
 
 	// servers
 	c.Command("server", "modify virtual machines", func(cmd *cli.Cmd) {
+		cmd.Command("backup", "get and set backup schedules", func(cmd *cli.Cmd) {
+			cmd.Command("get", "get a backup schedule", serversBackupGetSchedule)
+			cmd.Command("set", "set a backup schedule", serversBackupSetSchedule)
+		})
 		cmd.Command("create", "create a new virtual machine", serversCreate)
 		cmd.Command("rename", "rename a virtual machine", serversRename)
 		cmd.Command("tag", "tag a virtual machine", serversTag)
@@ -86,6 +95,7 @@ func (c *CLI) RegisterCommands() {
 		cmd.Command("app", "show and change application on a virtual machine", func(cmd *cli.Cmd) {
 			cmd.Command("change", "change application of virtual machine (all data will be lost)", serversChangeApplication)
 			cmd.Command("list", "show a list of available applications to which can be changed to", serversListApplications)
+			cmd.Command("info", "retrieves application information of virtual machine", serversAppInfo)
 		})
 		cmd.Command("iso", "attach/detach ISO of a virtual machine", func(cmd *cli.Cmd) {
 			cmd.Command("attach", "attach ISO to a virtual machine (server will hard reboot)", serversAttachISO)
@@ -116,6 +126,11 @@ func (c *CLI) RegisterCommands() {
 		// firewall groups
 		cmd.Command("set-firewall-group", "set firewall group of a virtual machine", serversSetFirewallGroup)
 		cmd.Command("unset-firewall-group", "remove virtual machine from firewall group", serversUnsetFirewallGroup)
+		// upgrade plans
+		cmd.Command("upgrade-plan", "upgrade plan of a virtual machine", func(cmd *cli.Cmd) {
+			cmd.Command("change", "upgrade plan of virtual machine (Note: Downgrading is currently not supported. Shrinking the hard disk is not possible without risking data loss.)", serversChangePlan)
+			cmd.Command("list", "show a list of VPSPLANIDs to which a virtual machine can be upgraded to", serversListUpgradePlans)
+		})
 	})
 	c.Command("servers", "list all active or pending virtual machines on current account", serversList)
 

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	vultr "github.com/JamesClonk/vultr/lib"
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 )
 
 func serversCreate(cmd *cli.Cmd) {
@@ -70,6 +70,43 @@ func serversCreate(cmd *cli.Cmd) {
 		tabsPrint(columns{server.ID, server.Name, server.RegionID, server.PlanID, *osID}, lengths)
 		tabsFlush()
 	}
+}
+
+func serversBackupGetSchedule(cmd *cli.Cmd) {
+	cmd.Spec = "SUBID"
+	id := cmd.StringArg("SUBID", "", "SUBID of virtual machine (see <servers>)")
+
+	server, err := GetClient().BackupGetSchedule(*id)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	lengths := []int{4, 14, 32, 2, 1, 1}
+	tabsPrint(columns{"Enabled", "CronType", "NextScheduledTimeUtc", "Hour", "Dow", "Dom"}, lengths)
+	tabsPrint(columns{server.Enabled, server.CronType, server.NextScheduledTimeUtc, server.Hour, server.Dow, server.Dom}, lengths)
+	tabsFlush()
+
+}
+func serversBackupSetSchedule(cmd *cli.Cmd) {
+	cmd.Spec = "SUBID -C [-H -w -m]"
+
+	id := cmd.StringArg("SUBID", "", "SUBID of virtual machine (see <servers>)")
+	cronType := cmd.StringArg("C cronType", "", "Backup cron type. Can be one of (daily, weekly, monthly, daily_alt_even, daily_alt_odd)")
+	hour := cmd.IntOpt("H hour", 0, "(optional) Hour value (0-23). Applicable to crons: daily, weekly, monthly, daily_alt_even, daily_alt_odd")
+	dayOfWeek := cmd.IntOpt("w dow", 0, "(optional) Day-of-week value (0-6). Applicable to crons: weekly")
+	dayOfMonth := cmd.IntOpt("m dom", 0, "(optional) Day-of-month value (1-28). Applicable to crons: monthly")
+	bs := vultr.BackupSchedule{
+		CronType: *cronType,
+		Hour:     *hour,
+		Dow:      *dayOfWeek,
+		Dom:      *dayOfMonth,
+	}
+	err := GetClient().BackupSetSchedule(*id, bs)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Backup schedule set\n\n")
 }
 
 func serversRename(cmd *cli.Cmd) {
@@ -431,13 +468,14 @@ func ipv4List(cmd *cli.Cmd) {
 			return
 		}
 
-		lengths := []int{24, 24, 24, 32, 48}
-		tabsPrint(columns{"IP", "NETMASK", "GATEWAY", "TYPE", "REVERSE DNS"}, lengths)
+		lengths := []int{24, 24, 24, 24, 32, 48}
+		tabsPrint(columns{"IP", "NETMASK", "GATEWAY", "MAC", "TYPE", "REVERSE DNS"}, lengths)
 		for _, ip := range list {
 			tabsPrint(columns{
 				ip.IP,
 				ip.Netmask,
 				ip.Gateway,
+				ip.MAC,
 				ip.Type,
 				ip.ReverseDNS,
 			}, lengths)
@@ -605,6 +643,56 @@ func serversListApplications(cmd *cli.Cmd) {
 		tabsPrint(columns{"APPID", "NAME", "SHORT_NAME", "DEPLOY_NAME", "SURCHARGE"}, lengths)
 		for _, app := range apps {
 			tabsPrint(columns{app.ID, app.Name, app.ShortName, app.DeployName, app.Surcharge}, lengths)
+		}
+		tabsFlush()
+	}
+}
+func serversAppInfo(cmd *cli.Cmd) {
+	id := cmd.StringArg("SUBID", "", "SUBID of virtual machine (see <servers>)")
+	cmd.Action = func() {
+		app, err := GetClient().GetApplicationInfo(*id)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if app.Info == "" {
+			fmt.Printf("Could not retrieve application information of virtual machine with SUBID %v!\n", *id)
+			return
+		}
+
+		fmt.Printf("%s", app.Info)
+	}
+}
+
+func serversChangePlan(cmd *cli.Cmd) {
+	cmd.Spec = "SUBID VPSPLANID"
+	id := cmd.StringArg("SUBID", "", "SUBID of virtual machine (see <servers>)")
+	planID := cmd.IntArg("VPSPLANID", 0, "Plan (VPSPLANID)")
+
+	cmd.Action = func() {
+		if err := GetClient().ChangePlanOfServer(*id, *planID); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Virtual machine plan changed to: %v\n", *planID)
+	}
+}
+func serversListUpgradePlans(cmd *cli.Cmd) {
+	id := cmd.StringArg("SUBID", "", "SUBID of virtual machine (see <servers>)")
+	cmd.Action = func() {
+		plans, err := GetClient().ListUpgradePlansForServer(*id)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if len(plans) == 0 {
+			fmt.Printf("0 available plans for virtual machine with SUBID %v to upgrade to.", *id)
+			return
+		}
+
+		lengths := []int{12}
+		tabsPrint(columns{"VPSPLANID"}, lengths)
+		for _, p := range plans {
+			tabsPrint(columns{p}, lengths)
 		}
 		tabsFlush()
 	}
